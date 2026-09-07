@@ -284,9 +284,25 @@ function generateSite({
   const articleTpl = fs.readFileSync(path.join(siteTemplatesDir, 'article.html'), 'utf8');
 
   const categoriesHtml = generateCategoriesHtml(articles, siteContentDir);
+  
+  let indexHtml = indexTpl.replace('{{categories}}', categoriesHtml).replace('{{logoHref}}', 'index.html');
+
+  // Inject home article content if a "Home" category article exists
+  const homeArticle = articles.find(a => a.category === 'Home');
+  if (homeArticle) {
+    const paragraphs = homeArticle.body.split('\n\n').filter(p => p.trim());
+    indexHtml = indexHtml
+      .replace('{{homeTitle}}', homeArticle.title)
+      .replace('{{homeImage}}', homeArticle.image)
+      .replace('{{homeParagraph1}}', paragraphs[0] || '')
+      .replace('{{homeParagraph2}}', paragraphs[1] || '')
+      .replace('{{homeParagraph3}}', paragraphs[2] || '')
+      .replace('{{homeParagraph4}}', paragraphs[3] || '');
+  }
+
   fs.writeFileSync(
     path.join(siteBuildDir, 'index.html'),
-    indexTpl.replace('{{categories}}', categoriesHtml).replace('{{logoHref}}', 'index.html')
+    indexHtml
   );
 
   articles.forEach(a => {
