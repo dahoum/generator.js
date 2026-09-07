@@ -163,7 +163,7 @@ function parseMarkdown(filePath) {
     if (m) fm[m[1]] = m[2].trim();
   });
 
-  if (!fm.category || !fm.title || !fm.image) {
+  if (!fm.category || !fm.title) {
     return null;
   }
 
