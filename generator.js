@@ -361,22 +361,6 @@ function generateSite({
     const articleRelativeToBuild = path.relative(siteBuildDir, filename);
     const ogUrl = '/' + articleRelativeToBuild.replace(/\\/g, '/');
 
-    if (dims) {
-      if (dims.width < MIN_IMAGE_WIDTH || dims.height < MIN_IMAGE_HEIGHT) {
-        console.warn(
-          `WARNING: Image '${a.image}' is too small for social media cards. ` +
-            `Recommended: at least ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}px. ` +
-            `Actual: ${dims.width}x${dims.height}px. ` +
-            `Article: ${a.title}`
-        );
-      }
-    } else {
-      console.warn(`WARNING: Could not read dimensions for image '${a.image}'. Article: ${a.title}`);
-    }
-
-    const ogImageWidth = dims ? dims.width : '';
-    const ogImageHeight = dims ? dims.height : '';
-
     let html = articleTpl
       .replace(/{{title}}/g, a.title)
       .replace(/{{logoHref}}/g, logoHref)
