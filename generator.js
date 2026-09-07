@@ -368,16 +368,23 @@ function generateSite({
 
     // Handle optional fields - only include elements if they have values
     if (!a.authors) {
-      html = html.replace(/<p class="article-authors">.*?<\/p>/, '');
+      // Remove the authors paragraph with any whitespace
+      html = html.replace(/\s*<p class="article-authors">.*?<\/p>\s*/, '');
     } else {
       html = html.replace(/{{authors}}/, a.authors);
     }
 
     if (!a.image) {
-      html = html.replace(/<img[^>]*src="{{image}}"[^>]*>/, '');
-      // Also clean up og:image meta tags
-      html = html.replace(/<meta property="og:image"[^>]*>/, '');
-      html = html.replace(/<meta name="twitter:image"[^>]*>/, '');
+      // Remove the image tag
+      html = html.replace(/\s*<img[^>]*src="{{image}}"[^>]*>\s*/, '');
+      // Also clean up og:image and twitter:image meta tags
+      html = html.replace(/\s*<meta property="og:image"[^>]*>\s*/g, '');
+      html = html.replace(/\s*<meta name="twitter:image"[^>]*>\s*/g, '');
+      // Clean up og:image:width and og:image:height
+      html = html.replace(/\s*<meta property="og:image:width"[^>]*>\s*/g, '');
+      html = html.replace(/\s*<meta property="og:image:height"[^>]*>\s*/g, '');
+      html = html.replace(/\s*<meta name="twitter:image:width"[^>]*>\s*/g, '');
+      html = html.replace(/\s*<meta name="twitter:image:height"[^>]*>\s*/g, '');
     } else {
       html = html.replace(/{{image}}/g, imageRelativeToOutput)
         .replace(/{{ogImage}}/g, ogImage)
@@ -386,10 +393,11 @@ function generateSite({
     }
 
     if (!a.explanation) {
-      html = html.replace(/<p class="article-explanation">.*?<\/p>/, '');
+      // Remove the explanation paragraph with any whitespace
+      html = html.replace(/\s*<p class="article-explanation">.*?<\/p>\s*/, '');
       // Clean up description meta tags
-      html = html.replace(/<meta property="og:description"[^>]*>/, '');
-      html = html.replace(/<meta name="twitter:description"[^>]*>/, '');
+      html = html.replace(/\s*<meta property="og:description"[^>]*>\s*/g, '');
+      html = html.replace(/\s*<meta name="twitter:description"[^>]*>\s*/g, '');
     } else {
       html = html.replace(/{{explanation}}/g, a.explanation);
     }
