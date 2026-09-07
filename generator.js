@@ -173,6 +173,7 @@ function parseMarkdown(filePath) {
     authors: fm.authors || '',
     image: fm.image,
     explanation: fm.explanation || '',
+    toc: fm.toc !== 'false', // default to true unless explicitly set to false
     body,
     filePath,
   };
@@ -181,6 +182,8 @@ function parseMarkdown(filePath) {
 function generateCategoriesHtml(articles, contentDir) {
   const byCategory = {};
   articles.forEach(a => {
+    // Skip articles with toc: false
+    if (a.toc === false) return;
     if (!byCategory[a.category]) byCategory[a.category] = [];
     byCategory[a.category].push(a);
   });
