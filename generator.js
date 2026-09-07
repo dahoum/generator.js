@@ -291,9 +291,12 @@ function generateSite({
   const homeArticle = articles.find(a => a.category === 'Home');
   if (homeArticle) {
     const paragraphs = homeArticle.body.split('\n\n').filter(p => p.trim());
+    const homeArticleRelativePath = path.relative(siteContentDir, path.dirname(homeArticle.filePath));
+    const homeImagePath = path.join(siteBuildDir, homeArticleRelativePath, homeArticle.image);
+    const homeImageRelative = path.relative(siteBuildDir, homeImagePath);
     indexHtml = indexHtml
       .replace('{{homeTitle}}', homeArticle.title)
-      .replace('{{homeImage}}', homeArticle.image)
+      .replace('{{homeImage}}', homeImageRelative)
       .replace('{{homeParagraph1}}', paragraphs[0] || '')
       .replace('{{homeParagraph2}}', paragraphs[1] || '')
       .replace('{{homeParagraph3}}', paragraphs[2] || '')
