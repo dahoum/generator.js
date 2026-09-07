@@ -366,41 +366,27 @@ function generateSite({
       .replace(/{{logoHref}}/g, logoHref)
       .replace(/{{ogUrl}}/g, ogUrl);
 
-    // Handle optional fields - only include elements if they have values
-    if (!a.authors) {
-      // Remove the authors paragraph with any whitespace
-      html = html.replace(/\s*<p class="article-authors">.*?<\/p>\s*/, '');
-    } else {
-      html = html.replace(/{{authors}}/, a.authors);
-    }
+    // Handle optional fields - replace placeholders with values or empty strings
+    // First replace all simple placeholders
+    html = html
+      .replace(/{{authors}}/g, a.authors || '')
+      .replace(/{{image}}/g, imageRelativeToOutput || '')
+      .replace(/{{explanation}}/g, a.explanation || '')
+      .replace(/{{ogImage}}/g, ogImage || '')
+      .replace(/{{ogImageWidth}}/g, ogImageWidth || '')
+      .replace(/{{ogImageHeight}}/g, ogImageHeight || '')
+      .replace(/{{logoHref}}/g, logoHref)
+      .replace(/{{ogUrl}}/g, ogUrl);
 
-    if (!a.image) {
-      // Remove the image tag
-      html = html.replace(/\s*<img[^>]*src="{{image}}"[^>]*>\s*/, '');
-      // Also clean up og:image and twitter:image meta tags
-      html = html.replace(/\s*<meta property="og:image"[^>]*>\s*/g, '');
-      html = html.replace(/\s*<meta name="twitter:image"[^>]*>\s*/g, '');
-      // Clean up og:image:width and og:image:height
-      html = html.replace(/\s*<meta property="og:image:width"[^>]*>\s*/g, '');
-      html = html.replace(/\s*<meta property="og:image:height"[^>]*>\s*/g, '');
-      html = html.replace(/\s*<meta name="twitter:image:width"[^>]*>\s*/g, '');
-      html = html.replace(/\s*<meta name="twitter:image:height"[^>]*>\s*/g, '');
-    } else {
-      html = html.replace(/{{image}}/g, imageRelativeToOutput)
-        .replace(/{{ogImage}}/g, ogImage)
-        .replace(/{{ogImageWidth}}/g, ogImageWidth)
-        .replace(/{{ogImageHeight}}/g, ogImageHeight);
-    }
-
-    if (!a.explanation) {
-      // Remove the explanation paragraph with any whitespace
-      html = html.replace(/\s*<p class="article-explanation">.*?<\/p>\s*/, '');
-      // Clean up description meta tags
-      html = html.replace(/\s*<meta property="og:description"[^>]*>\s*/g, '');
-      html = html.replace(/\s*<meta name="twitter:description"[^>]*>\s*/g, '');
-    } else {
-      html = html.replace(/{{explanation}}/g, a.explanation);
-    }
+    // Then clean up empty elements
+    // Remove empty authors paragraph
+    html = html.replace(/\s*<p class="article-authors">\s*<\/p>\s*/g, '');
+    // Remove empty image tag
+    html = html.replace(/\s*<img[^>]*src=""[^>]*>\s*/g, '');
+    // Remove empty explanation paragraph
+    html = html.replace(/\s*<p class="article-explanation">\s*<\/p>\s*/g, '');
+    // Clean up meta tags with empty content
+    html = html.replace(/\s*<meta[^>]*content=""[^>]*>\s*/g, '');
 
     html = html.replace('{{content}}', markdownToHtml(a.body, outputDir, articleRelativePath));
 
