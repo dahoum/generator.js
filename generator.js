@@ -173,7 +173,7 @@ function parseMarkdown(filePath) {
     authors: fm.authors || '',
     image: fm.image,
     explanation: fm.explanation || '',
-    toc: fm.toc !== 'false', // default to true unless explicitly set to false
+    toc: fm.toc === 'false' ? false : true, // default to true unless explicitly set to 'false'
     body,
     filePath,
   };
