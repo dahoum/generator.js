@@ -366,27 +366,49 @@ function generateSite({
       .replace(/{{logoHref}}/g, logoHref)
       .replace(/{{ogUrl}}/g, ogUrl);
 
-    // Handle optional fields - replace placeholders with values or empty strings
-    // First replace all simple placeholders
+    // Handle optional fields - only include elements if they have values
     html = html
-      .replace(/{{authors}}/g, a.authors || '')
-      .replace(/{{image}}/g, imageRelativeToOutput || '')
-      .replace(/{{explanation}}/g, a.explanation || '')
-      .replace(/{{ogImage}}/g, ogImage || '')
-      .replace(/{{ogImageWidth}}/g, ogImageWidth || '')
-      .replace(/{{ogImageHeight}}/g, ogImageHeight || '')
+      .replace(/{{title}}/g, a.title)
       .replace(/{{logoHref}}/g, logoHref)
       .replace(/{{ogUrl}}/g, ogUrl);
 
-    // Then clean up empty elements
-    // Remove empty authors paragraph
-    html = html.replace(/\s*<p class="article-authors">\s*<\/p>\s*/g, '');
-    // Remove empty image tag
-    html = html.replace(/\s*<img[^>]*src=""[^>]*>\s*/g, '');
-    // Remove empty explanation paragraph
-    html = html.replace(/\s*<p class="article-explanation">\s*<\/p>\s*/g, '');
-    // Clean up meta tags with empty content
-    html = html.replace(/\s*<meta[^>]*content=""[^>]*>\s*/g, '');
+    // Conditionally handle authors
+    if (a.authors) {
+      html = html.replace(/{{authors}}/, a.authors);
+    } else {
+      // Remove the entire authors paragraph line (preserving surrounding newlines)
+      html = html.replace(/^[\s]*<p class="article-authors">{{authors}}<\/p>[\s]*$/gm, '');
+    }
+
+    // Conditionally handle image
+    if (a.image) {
+      html = html
+        .replace(/{{image}}/g, imageRelativeToOutput)
+        .replace(/{{ogImage}}/g, ogImage)
+        .replace(/{{ogImageWidth}}/g, ogImageWidth)
+        .replace(/{{ogImageHeight}}/g, ogImageHeight);
+    } else {
+      // Remove image tag line
+      html = html.replace(/^[\s]*<img[^>]*src="{{image}}"[^>]*>[\s]*$/gm, '');
+      // Remove og:image meta tags
+      html = html.replace(/^[\s]*<meta property="og:image"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta name="twitter:image"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta property="og:image:width"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta property="og:image:height"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta name="twitter:image:width"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta name="twitter:image:height"[^>]*>[\s]*$/gm, '');
+    }
+
+    // Conditionally handle explanation
+    if (a.explanation) {
+      html = html.replace(/{{explanation}}/, a.explanation);
+    } else {
+      // Remove the entire explanation paragraph line
+      html = html.replace(/^[\s]*<p class="article-explanation">{{explanation}}<\/p>[\s]*$/gm, '');
+      // Remove og:description meta tags
+      html = html.replace(/^[\s]*<meta property="og:description"[^>]*>[\s]*$/gm, '');
+      html = html.replace(/^[\s]*<meta name="twitter:description"[^>]*>[\s]*$/gm, '');
+    }
 
     html = html.replace('{{content}}', markdownToHtml(a.body, outputDir, articleRelativePath));
 
