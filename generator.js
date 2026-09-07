@@ -321,22 +321,45 @@ function generateSite({
     const filename = path.join(outputDir, folderName + '.html');
 
     const articleRelativePath = path.relative(siteContentDir, path.dirname(a.filePath));
-    const imageRelativeToOutput = path.relative(
-      outputDir,
-      path.join(siteBuildDir, articleRelativePath, a.image)
-    );
+    
+    let imageRelativeToOutput = '';
+    let ogImage = '';
+    let ogImageWidth = '';
+    let ogImageHeight = '';
+    
+    if (a.image) {
+      imageRelativeToOutput = path.relative(
+        outputDir,
+        path.join(siteBuildDir, articleRelativePath, a.image)
+      );
+      ogImage =
+        '/' +
+        path
+          .relative(siteBuildDir, path.join(siteBuildDir, articleRelativePath, a.image))
+          .replace(/\\/g, '/');
+      
+      const imageAbsPath = path.join(dir, 'content', articleRelativePath, a.image);
+      const dims = getImageDimensions(imageAbsPath);
+      
+      if (dims) {
+        if (dims.width < MIN_IMAGE_WIDTH || dims.height < MIN_IMAGE_HEIGHT) {
+          console.warn(
+            `WARNING: Image '${a.image}' is too small for social media cards. ` +
+              `Recommended: at least ${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}px. ` +
+              `Actual: ${dims.width}x${dims.height}px. ` +
+              `Article: ${a.title}`
+          );
+        }
+        ogImageWidth = dims.width;
+        ogImageHeight = dims.height;
+      } else {
+        console.warn(`WARNING: Could not read dimensions for image '${a.image}'. Article: ${a.title}`);
+      }
+    }
 
     const logoHref = path.relative(outputDir, path.join(siteBuildDir, 'index.html'));
     const articleRelativeToBuild = path.relative(siteBuildDir, filename);
     const ogUrl = '/' + articleRelativeToBuild.replace(/\\/g, '/');
-    const ogImage =
-      '/' +
-      path
-        .relative(siteBuildDir, path.join(siteBuildDir, articleRelativePath, a.image))
-        .replace(/\\/g, '/');
-
-    const imageAbsPath = path.join(dir, 'content', articleRelativePath, a.image);
-    const dims = getImageDimensions(imageAbsPath);
 
     if (dims) {
       if (dims.width < MIN_IMAGE_WIDTH || dims.height < MIN_IMAGE_HEIGHT) {
@@ -354,17 +377,40 @@ function generateSite({
     const ogImageWidth = dims ? dims.width : '';
     const ogImageHeight = dims ? dims.height : '';
 
-    const html = articleTpl
+    let html = articleTpl
       .replace(/{{title}}/g, a.title)
-      .replace(/{{authors}}/g, a.authors)
-      .replace(/{{image}}/g, imageRelativeToOutput)
-      .replace(/{{explanation}}/g, a.explanation)
       .replace(/{{logoHref}}/g, logoHref)
-      .replace(/{{ogImage}}/g, ogImage)
-      .replace(/{{ogUrl}}/g, ogUrl)
-      .replace(/{{ogImageWidth}}/g, ogImageWidth)
-      .replace(/{{ogImageHeight}}/g, ogImageHeight)
-      .replace('{{content}}', markdownToHtml(a.body, outputDir, articleRelativePath));
+      .replace(/{{ogUrl}}/g, ogUrl);
+
+    // Handle optional fields - only include elements if they have values
+    if (!a.authors) {
+      html = html.replace(/<p class="article-authors">.*?<\/p>/, '');
+    } else {
+      html = html.replace(/{{authors}}/, a.authors);
+    }
+
+    if (!a.image) {
+      html = html.replace(/<img[^>]*src="{{image}}"[^>]*>/, '');
+      // Also clean up og:image meta tags
+      html = html.replace(/<meta property="og:image"[^>]*>/, '');
+      html = html.replace(/<meta name="twitter:image"[^>]*>/, '');
+    } else {
+      html = html.replace(/{{image}}/g, imageRelativeToOutput)
+        .replace(/{{ogImage}}/g, ogImage)
+        .replace(/{{ogImageWidth}}/g, ogImageWidth)
+        .replace(/{{ogImageHeight}}/g, ogImageHeight);
+    }
+
+    if (!a.explanation) {
+      html = html.replace(/<p class="article-explanation">.*?<\/p>/, '');
+      // Clean up description meta tags
+      html = html.replace(/<meta property="og:description"[^>]*>/, '');
+      html = html.replace(/<meta name="twitter:description"[^>]*>/, '');
+    } else {
+      html = html.replace(/{{explanation}}/g, a.explanation);
+    }
+
+    html = html.replace('{{content}}', markdownToHtml(a.body, outputDir, articleRelativePath));
 
     fs.writeFileSync(filename, html);
 
