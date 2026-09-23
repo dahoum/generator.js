@@ -374,7 +374,7 @@ function generateSite({
 
     // Conditionally handle authors
     if (a.authors) {
-      html = html.replace(/{{authors}}/, a.authors);
+      html = html.replace(/{{authors}}/g, a.authors);
     } else {
       // Remove the entire authors paragraph line (preserving surrounding newlines)
       html = html.replace(/^[\s]*<p class="article-authors">{{authors}}<\/p>[\s]*$/gm, '');
@@ -401,7 +401,7 @@ function generateSite({
 
     // Conditionally handle explanation
     if (a.explanation) {
-      html = html.replace(/{{explanation}}/, a.explanation);
+      html = html.replace(/{{explanation}}/g, a.explanation);
     } else {
       // Remove the entire explanation paragraph line
       html = html.replace(/^[\s]*<p class="article-explanation">{{explanation}}<\/p>[\s]*$/gm, '');
