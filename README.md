@@ -1,3 +1,3 @@
-# generator.js
+# Static Site Generator
 
-This is my static site generator I created w/ Mistral.
+This is my static site generator.
