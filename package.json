@@ -1,6 +1,15 @@
 {
   "name": "generator.js",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "main": "generator.js",
-  "description": "Static Site Generator by Brünhild"
+  "description": "Static Site Generator by Brünhild",
+  "scripts": {
+    "test": "node --test \"qa/**/*.test.js\"",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include=generator.js --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \"qa/unit/*.test.js\"",
+    "mutation": "node qa/tools/mutation.js",
+    "qa": "npm test && npm run coverage && npm run mutation"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }
