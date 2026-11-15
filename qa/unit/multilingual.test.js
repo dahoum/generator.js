@@ -42,7 +42,7 @@ const ARTICLE_TEMPLATE = [
  */
 const INDEX_TEMPLATE = [
   '<html lang="{{lang}}"><head>{{alternateLinks}}{{languageRedirect}}</head>',
-  '<body>{{languageSwitch}}<h1>{{text.hero}}</h1>',
+  '<body>{{languageSwitch}}<a href="{{logoHref}}">Ij</a><h1>{{text.hero}}</h1>',
   '<h2>{{homeTitle}}</h2><img src="{{homeImage}}"><p>{{homeParagraph1}}</p><p>{{homeParagraph2}}</p><p>{{homeParagraph3}}</p><p>{{homeParagraph4}}</p>',
   '{{categories}}',
   '{{footer}}</body></html>',
@@ -475,6 +475,15 @@ function alternates() {
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html">'
   );
   assert.strictEqual(generator.alternateLinks(new Map([['de', '/site/public/a.html']]), '/site/public/index.html', settings), '');
+  const three = generator.resolveOptions({
+    rootDir: '/site',
+    siteUrl: 'https://example.com',
+    languages: [{ code: 'de', path: '' }, { code: 'fr', path: 'fr' }, { code: 'en', path: 'english' }],
+  });
+  assert.strictEqual(
+    generator.alternateLinks(translations, '', three),
+    '<link rel="alternate" hreflang="de" href="https://example.com/a.html">\n<link rel="alternate" hreflang="en" href="https://example.com/english/a.html">'
+  );
 }
 test('alternateLinks lists translations for search engines', alternates);
 
@@ -548,6 +557,23 @@ function notFound() {
   assert.deepStrictEqual(runScript(script, { pathname: '/english/x/y.html' }), ['/english/']);
   assert.deepStrictEqual(runScript(script, { pathname: '/energie/x.html' }), ['/']);
   assert.deepStrictEqual(runScript(script, { pathname: '/englishman.html' }), ['/']);
+
+  const three = generator.notFoundPage(
+    [{ code: 'de', path: '' }, { code: 'fr', path: 'francais' }, { code: 'en', path: 'english' }],
+    new Map([['de', {}], ['fr', {}], ['en', {}]])
+  );
+  assert.ok(
+    three.includes(
+      '  var target = "/";\n' +
+        '  if (location.pathname.indexOf("/francais/") === 0) {\n    target = "/francais/";\n  }\n' +
+        '  if (location.pathname.indexOf("/english/") === 0) {\n    target = "/english/";\n  }\n' +
+        '  location.replace(target);'
+    )
+  );
+  assert.ok(three.includes('<p>Page not found / Page not found / Page not found</p>'));
+  assert.ok(three.includes('<p><a href="/" hreflang="de">DE</a> · <a href="/francais/" hreflang="fr">FR</a> · <a href="/english/" hreflang="en">EN</a></p>'));
+  const threeScript = three.slice(three.indexOf('<script>'), three.indexOf('</script>') + 9);
+  assert.deepStrictEqual(runScript(threeScript, { pathname: '/francais/x.html' }), ['/francais/']);
 }
 test('notFoundPage forwards unknown addresses to the right home page', notFound);
 
@@ -575,7 +601,7 @@ function bilingualBuild() {
       '<html lang="de"><head><link rel="alternate" hreflang="de" href="https://example.com/index.html">',
       '<link rel="alternate" hreflang="en" href="https://example.com/english/index.html">',
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html">' + redirect + '</head>',
-      '<body><nav class="language-switch"><span aria-current="page">DE</span> | <a href="english/index.html" hreflang="en" lang="en">EN</a></nav><h1>Willkommen</h1>',
+      '<body><nav class="language-switch"><span aria-current="page">DE</span> | <a href="english/index.html" hreflang="en" lang="en">EN</a></nav><a href="index.html">Ij</a><h1>Willkommen</h1>',
       '<h2>Start</h2><img src="media/home/start/images/h.jpg"><p>Hallo.</p><p></p><p></p><p></p>',
       '<section>\n<h2>Energie</h2>\n<p><a href="energie/das-netz.html">Das Netz</a></p>\n</section>\n',
       '<footer>Impressum <a href="recht/datenschutz.html">Datenschutz</a></footer></body></html>',
@@ -587,7 +613,7 @@ function bilingualBuild() {
       '<html lang="en"><head><link rel="alternate" hreflang="de" href="https://example.com/index.html">',
       '<link rel="alternate" hreflang="en" href="https://example.com/english/index.html">',
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html"></head>',
-      '<body><nav class="language-switch"><a href="../index.html" hreflang="de" lang="de">DE</a> | <span aria-current="page">EN</span></nav><h1>Welcome</h1>',
+      '<body><nav class="language-switch"><a href="../index.html" hreflang="de" lang="de">DE</a> | <span aria-current="page">EN</span></nav><a href="index.html">Ij</a><h1>Welcome</h1>',
       '<h2>Home</h2><img src=""><p>Hello.</p><p></p><p></p><p></p>',
       '<section>\n<h2>Energy</h2>\n<p><a href="energy/the-grid.html">The Grid</a></p>\n<p><a href="energy/solo.html">Solo</a></p>\n</section>\n',
       '<footer>Imprint <a href="legal/privacy.html">Privacy</a></footer></body></html>',

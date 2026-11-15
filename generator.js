@@ -1243,13 +1243,13 @@ function checkLanguages(languages) {
   if (!Array.isArray(languages) || languages.length < 2) {
     throw new Error('languages needs at least two entries.');
   }
-  const codes = [];
+  const codes = new Set();
   for (let index = 0; index < languages.length; index += 1) {
     const language = languages[index];
-    if (!/^[a-z]{2,3}$/.test(language.code) || codes.includes(language.code)) {
+    if (!/^[a-z]{2,3}$/.test(language.code) || codes.has(language.code)) {
       throw new Error('Invalid or repeated language code: ' + String(language.code));
     }
-    codes.push(language.code);
+    codes.add(language.code);
     if (index === 0 && language.path !== '') {
       throw new Error('The first language is published at the top level; its path must be empty.');
     }
@@ -1285,11 +1285,23 @@ function absoluteUrl(siteUrl, relativePath) {
  * @returns {string} The finished page.
  */
 function finishPage(html, pageFile, settings, footer) {
+  return completePage(fill(html, 'footer', footer), pageFile, settings);
+}
+
+/**
+ * Resolve `{{root}}` and warn about placeholders left over.
+ *
+ * @param {string} html - Rendered page, footer already inserted.
+ * @param {string} pageFile - Where the page will be written.
+ * @param {Settings} settings - Build settings.
+ * @returns {string} The finished page.
+ */
+function completePage(html, pageFile, settings) {
   let root = relativeUrl(path.dirname(pageFile), settings.buildDir);
   if (root !== '') {
     root += '/';
   }
-  const page = fill(fill(html, 'footer', footer), 'root', root);
+  const page = fill(html, 'root', root);
   const leftover = findLeftoverPlaceholders(page);
   if (leftover.length > 0) {
     settings.logger.warn(
@@ -1486,7 +1498,7 @@ function loadTemplates(templatesDir) {
 /**
  * Print drafts and skipped files.
  *
- * @param {ArticleCollection} collection - Result of collectArticles.
+ * @param {(ArticleCollection|MultilingualCollection)} collection - Result of collectArticles or collectMultilingual.
  * @param {Settings} settings - Build settings.
  * @returns {void}
  */
@@ -1720,8 +1732,8 @@ function parseTranslationSource(source, filePath, lang) {
 function smallestOrder(entries) {
   let smallest = Infinity;
   for (const entry of entries) {
-    if (entry.order !== null && entry.order < smallest) {
-      smallest = entry.order;
+    if (entry.order !== null) {
+      smallest = Math.min(smallest, entry.order);
     }
   }
   return smallest;
@@ -1943,7 +1955,7 @@ function loadTexts(templatesDir, code) {
   if (!fs.existsSync(file)) {
     return {};
   }
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return JSON.parse(fs.readFileSync(file).toString());
 }
 
 /**
@@ -2171,7 +2183,7 @@ function finishMultilingualPage(html, page, context) {
   result = fill(result, 'languageSwitch', languageSwitch(page.file, page.lang, page.translations, settings.languages));
   result = fill(result, 'alternateLinks', alternateLinks(page.translations, defaultFile, settings));
   result = fill(result, 'languageRedirect', redirect);
-  return finishPage(result, page.file, settings, '');
+  return completePage(result, page.file, settings);
 }
 
 /**
@@ -2218,7 +2230,7 @@ function generateMultilingualSite(settings) {
   for (const skipped of plan.skipped) {
     collection.skipped.push(skipped);
   }
-  reportCollection({ articles: [], drafts: collection.drafts, skipped: collection.skipped }, settings);
+  reportCollection(collection, settings);
   if (plan.pages.length === 0 && plan.homes.size === 0) {
     settings.logger.log('No publishable .md files found in ' + settings.contentDir + '/');
     return null;
@@ -2315,6 +2327,7 @@ module.exports = {
   collectArticles: collectArticles,
   collectMultilingual: collectMultilingual,
   compareArticles: compareArticles,
+  completePage: completePage,
   compareFolders: compareFolders,
   compareGroups: compareGroups,
   compareSections: compareSections,
