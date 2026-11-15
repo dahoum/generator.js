@@ -88,6 +88,7 @@ const INLINE_TOKENS =
  * @property {string} [defaultLang] - Value of `{{lang}}` for articles without `lang:`. Default: `en`.
  * @property {Logger} [logger] - Where messages go. Default: `console`.
  * @property {string} [homeDir] - The user's home directory, which is never used as build directory. Default: `os.homedir()`.
+ * @property {Array<Language>} [languages] - Two or more languages switch on the multilingual layout (see README).
  */
 
 /**
@@ -101,6 +102,7 @@ const INLINE_TOKENS =
  * @property {string} defaultLang - Fallback language.
  * @property {Logger} logger - Where messages go.
  * @property {string} homeDir - The user's home directory.
+ * @property {(Array<Language>|null)} languages - Languages of a multilingual site, or null.
  */
 
 /**
@@ -175,6 +177,21 @@ const INLINE_TOKENS =
  * @property {string} index - Contents of index.html.
  * @property {string} article - Contents of article.html.
  * @property {string} footer - Contents of footer.html, or an empty string.
+ */
+
+/**
+ * @typedef {Object} Language
+ * @property {string} code - Language code such as `de`; also the prefix of content file names (`de-das-netz.md`).
+ * @property {string} path - Folder of the language in the build directory; empty for the first language, which is published at the top level.
+ */
+
+/**
+ * @typedef {Object} PageTarget
+ * @property {string} file - Where the page is written.
+ * @property {string} articleDir - Where the article's `images/` and `pdfs/` are published.
+ * @property {string} sourceDir - The article's folder in the content directory.
+ * @property {string} lang - Language of the page.
+ * @property {string} indexFile - The home page the logo links to.
  */
 
 /**
@@ -779,8 +796,7 @@ function renderImage(alt, source, outputDir, articleImagesDir, linkHref) {
 }
 
 /**
- * Convert an article body from Markdown to HTML. Every non-empty line is a
- * block: a heading, a list item, an image or a paragraph.
+ * Convert an article body from Markdown to HTML (single-language layout).
  *
  * @param {string} markdown - Article body.
  * @param {string} outputDir - Directory of the page in the build directory.
@@ -788,7 +804,19 @@ function renderImage(alt, source, outputDir, articleImagesDir, linkHref) {
  * @returns {string} HTML.
  */
 function markdownToHtml(markdown, outputDir, articleRelativePath) {
-  const articleDir = path.join(path.dirname(outputDir), articleRelativePath);
+  return renderMarkdown(markdown, outputDir, path.join(path.dirname(outputDir), articleRelativePath));
+}
+
+/**
+ * Convert an article body from Markdown to HTML. Every non-empty line is a
+ * block: a heading, a list item, an image or a paragraph.
+ *
+ * @param {string} markdown - Article body.
+ * @param {string} outputDir - Directory of the page in the build directory.
+ * @param {string} articleDir - Where the article's `images/` and `pdfs/` are published.
+ * @returns {string} HTML.
+ */
+function renderMarkdown(markdown, outputDir, articleDir) {
 
   /**
    * Resolve `pdfs/...` link targets to the article's PDF folder.
@@ -1134,7 +1162,7 @@ function assertSafeBuildDir(buildDir, protectedDirs, homeDir) {
  */
 function findLeftoverPlaceholders(html) {
   const found = [];
-  const matches = html.match(/{{\s*[\w.]+\s*}}/g);
+  const matches = html.match(/{{[^{}]+}}/g);
   if (matches !== null) {
     for (const placeholder of matches) {
       if (!found.includes(placeholder)) {
@@ -1185,6 +1213,7 @@ function resolveOptions(options) {
     defaultLang: 'en',
     logger: console,
     homeDir: os.homedir(),
+    languages: null,
   };
   for (const name of ['contentDir', 'templatesDir', 'buildDir', 'stripImageMetadata', 'defaultLang', 'logger', 'homeDir']) {
     if (given[name] !== undefined) {
@@ -1194,7 +1223,40 @@ function resolveOptions(options) {
   if (given.siteUrl !== undefined) {
     settings.siteUrl = given.siteUrl.replace(/\/+$/, '');
   }
+  if (given.languages !== undefined) {
+    checkLanguages(given.languages);
+    settings.languages = given.languages;
+  }
   return settings;
+}
+
+/**
+ * Check the `languages` option.
+ *
+ * @param {Array<Language>} languages - Languages as passed to generateSite.
+ * @returns {void}
+ * @throws {Error} When there are fewer than two languages, a code is not two
+ *   or three lowercase letters or used twice, the first language has a path,
+ *   or another language has none or an invalid one.
+ */
+function checkLanguages(languages) {
+  if (!Array.isArray(languages) || languages.length < 2) {
+    throw new Error('languages needs at least two entries.');
+  }
+  const codes = [];
+  for (let index = 0; index < languages.length; index += 1) {
+    const language = languages[index];
+    if (!/^[a-z]{2,3}$/.test(language.code) || codes.includes(language.code)) {
+      throw new Error('Invalid or repeated language code: ' + String(language.code));
+    }
+    codes.push(language.code);
+    if (index === 0 && language.path !== '') {
+      throw new Error('The first language is published at the top level; its path must be empty.');
+    }
+    if (index > 0 && !/^[a-z0-9][a-z0-9-]*$/.test(language.path)) {
+      throw new Error('Invalid path for language ' + language.code + ': ' + String(language.path));
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1238,16 +1300,15 @@ function finishPage(html, pageFile, settings, footer) {
 }
 
 /**
- * Fill the home page fields from the article with `category: Home`.
+ * Fill the home page fields from the home article.
  *
  * @param {string} html - Index template, partly filled.
  * @param {Article} home - The home article.
- * @param {string} contentDir - Content directory.
+ * @param {string} indexDir - Directory of the index page.
+ * @param {string} articleDir - Where the home article's `images/` and `pdfs/` are published.
  * @returns {string} The template with `{{homeTitle}}`, `{{homeImage}}` and `{{homeParagraph1}}`-`{{homeParagraph4}}` filled.
  */
-function fillHomeArticle(html, home, contentDir) {
-  const location = articleOutput(home, contentDir);
-
+function fillHomeArticle(html, home, indexDir, articleDir) {
   /**
    * Resolve `pdfs/...` link targets relative to the home page.
    *
@@ -1256,14 +1317,14 @@ function fillHomeArticle(html, home, contentDir) {
    */
   function homeLink(href) {
     if (href.startsWith('pdfs/')) {
-      return toPosix(path.join(location.articleRelativePath, href), path.sep);
+      return relativeUrl(indexDir, path.join(articleDir, href));
     }
     return href;
   }
 
   let image = '';
   if (home.image !== '') {
-    image = toPosix(path.join(location.articleRelativePath, home.image), path.sep);
+    image = relativeUrl(indexDir, path.join(articleDir, home.image));
   }
   let result = fill(fill(html, 'homeTitle', home.title), 'homeImage', image);
   const paragraphs = home.body.split(/\n\s*\n/);
@@ -1290,7 +1351,8 @@ function renderIndex(articles, settings, templates) {
   html = fill(fill(html, 'logoHref', 'index.html'), 'lang', settings.defaultLang);
   for (const article of articles) {
     if (article.category === 'Home') {
-      html = fillHomeArticle(html, article, settings.contentDir);
+      const articleDir = path.join(settings.buildDir, articleOutput(article, settings.contentDir).articleRelativePath);
+      html = fillHomeArticle(html, article, settings.buildDir, articleDir);
       break;
     }
   }
@@ -1301,18 +1363,18 @@ function renderIndex(articles, settings, templates) {
  * Social media image fields of an article, with a warning for missing or small images.
  *
  * @param {Article} article - The article (with an image).
- * @param {ArticleLocation} location - Where the article is published.
+ * @param {PageTarget} target - Where the page and its files go.
  * @param {Settings} settings - Build settings.
  * @returns {{url: string, width: string, height: string}} Values for `og:image`, `og:image:width` and `og:image:height`.
  */
-function socialImage(article, location, settings) {
-  const imageInBuild = path.join(settings.buildDir, location.articleRelativePath, article.image);
+function socialImage(article, target, settings) {
+  const imageInBuild = path.join(target.articleDir, article.image);
   const result = {
     url: absoluteUrl(settings.siteUrl, path.relative(settings.buildDir, imageInBuild)),
     width: '',
     height: '',
   };
-  const size = getImageDimensions(path.join(settings.contentDir, location.articleRelativePath, article.image));
+  const size = getImageDimensions(path.join(target.sourceDir, article.image));
   if (size === null) {
     settings.logger.warn("WARNING: Could not read dimensions for image '" + article.image + "'. Article: " + article.title);
     return result;
@@ -1347,11 +1409,32 @@ function renderArticle(article, settings, templates) {
   if (article.lang !== '') {
     lang = article.lang;
   }
+  const target = {
+    file: file,
+    articleDir: path.join(settings.buildDir, location.articleRelativePath),
+    sourceDir: location.articleDir,
+    lang: lang,
+    indexFile: path.join(settings.buildDir, 'index.html'),
+  };
+  const html = fillArticleTemplate(templates.article, article, target, settings);
+  return { file: file, html: finishPage(html, file, settings, templates.footer) };
+}
 
-  let html = fill(templates.article, 'title', escapeQuotes(article.title));
-  html = fill(html, 'logoHref', relativeUrl(outputDir, path.join(settings.buildDir, 'index.html')));
-  html = fill(html, 'ogUrl', absoluteUrl(settings.siteUrl, path.relative(settings.buildDir, file)));
-  html = fill(html, 'lang', lang);
+/**
+ * Fill an article template with the fields of an article.
+ *
+ * @param {string} template - The article template.
+ * @param {Article} article - The article.
+ * @param {PageTarget} target - Where the page and its files go.
+ * @param {Settings} settings - Build settings.
+ * @returns {string} The page before the footer and `{{root}}` are filled.
+ */
+function fillArticleTemplate(template, article, target, settings) {
+  const outputDir = path.dirname(target.file);
+  let html = fill(template, 'title', escapeQuotes(article.title));
+  html = fill(html, 'logoHref', relativeUrl(outputDir, target.indexFile));
+  html = fill(html, 'ogUrl', absoluteUrl(settings.siteUrl, path.relative(settings.buildDir, target.file)));
+  html = fill(html, 'lang', target.lang);
 
   // Optional fields: fill them, or remove the template line that would stay empty.
   if (article.authors !== '') {
@@ -1361,8 +1444,8 @@ function renderArticle(article, settings, templates) {
   }
 
   if (article.image !== '') {
-    const image = socialImage(article, location, settings);
-    html = fill(html, 'image', relativeUrl(outputDir, path.join(settings.buildDir, location.articleRelativePath, article.image)));
+    const image = socialImage(article, target, settings);
+    html = fill(html, 'image', relativeUrl(outputDir, path.join(target.articleDir, article.image)));
     html = fill(html, 'ogImage', image.url);
     html = fill(html, 'ogImageWidth', image.width);
     html = fill(html, 'ogImageHeight', image.height);
@@ -1378,8 +1461,7 @@ function renderArticle(article, settings, templates) {
     html = html.replace(/^\s*<meta (property|name)="(og|twitter):description"[^>]*>\s*$/gm, '');
   }
 
-  html = fill(html, 'content', markdownToHtml(article.body, outputDir, location.articleRelativePath));
-  return { file: file, html: finishPage(html, file, settings, templates.footer) };
+  return fill(html, 'content', renderMarkdown(article.body, outputDir, target.articleDir));
 }
 
 /**
@@ -1424,37 +1506,20 @@ function reportCollection(collection, settings) {
 }
 
 /**
- * Build the site.
+ * Empty the build directory and copy the shared files: style.css and the
+ * template folders (images, icons, fonts). Warns when no site URL is set.
  *
- * @param {SiteOptions} [options] - Locations and behaviour; every option is optional.
- * @returns {(BuildResult|null)} The published articles, or null when nothing was built
- *   (content directory just created, or no publishable articles).
- * @throws {Error} When a required template is missing or the build directory is unsafe.
+ * @param {Settings} settings - Build settings.
+ * @returns {CopyStats} Counter of stripped images, to be continued by the caller.
+ * @throws {Error} When the build directory is unsafe.
  */
-function generateSite(options) {
-  const settings = resolveOptions(options);
-  checkTemplates(settings.templatesDir);
-
-  if (!fs.existsSync(settings.contentDir)) {
-    fs.mkdirSync(settings.contentDir, { recursive: true });
-    settings.logger.log('Created ' + settings.contentDir + '/ — add your .md files here.');
-    return null;
-  }
-
-  const collection = collectArticles(settings.contentDir);
-  reportCollection(collection, settings);
-  if (collection.articles.length === 0) {
-    settings.logger.log('No publishable .md files found in ' + settings.contentDir + '/');
-    return null;
-  }
-
+function prepareBuildDirectory(settings) {
   if (settings.siteUrl === '') {
     settings.logger.warn(
       'WARNING: siteUrl is not set, so og:image and og:url are relative. ' +
         'Social networks need absolute URLs: pass siteUrl: "https://your-domain".'
     );
   }
-
   assertSafeBuildDir(
     settings.buildDir,
     [settings.rootDir, settings.contentDir, settings.templatesDir, process.cwd()],
@@ -1471,7 +1536,53 @@ function generateSite(options) {
       copyDirectory(source, path.join(settings.buildDir, name), settings.stripImageMetadata, stats);
     }
   }
+  return stats;
+}
 
+/**
+ * Report the end of a build.
+ *
+ * @param {CopyStats} stats - Image counter.
+ * @param {number} pages - Number of article pages written.
+ * @param {Settings} settings - Build settings.
+ * @returns {void}
+ */
+function reportBuild(stats, pages, settings) {
+  if (stats.imagesStripped > 0) {
+    settings.logger.log('Removed metadata (EXIF/GPS/XMP/text) from ' + String(stats.imagesStripped) + ' image(s).');
+  }
+  settings.logger.log('Generated ' + String(pages) + ' article(s) in ' + settings.buildDir + '/');
+}
+
+/**
+ * Build the site.
+ *
+ * @param {SiteOptions} [options] - Locations and behaviour; every option is optional.
+ * @returns {(BuildResult|null)} The published articles, or null when nothing was built
+ *   (content directory just created, or no publishable articles).
+ * @throws {Error} When a required template is missing, an option is invalid or the build directory is unsafe.
+ */
+function generateSite(options) {
+  const settings = resolveOptions(options);
+  checkTemplates(settings.templatesDir);
+
+  if (!fs.existsSync(settings.contentDir)) {
+    fs.mkdirSync(settings.contentDir, { recursive: true });
+    settings.logger.log('Created ' + settings.contentDir + '/ — add your .md files here.');
+    return null;
+  }
+  if (settings.languages !== null) {
+    return generateMultilingualSite(settings);
+  }
+
+  const collection = collectArticles(settings.contentDir);
+  reportCollection(collection, settings);
+  if (collection.articles.length === 0) {
+    settings.logger.log('No publishable .md files found in ' + settings.contentDir + '/');
+    return null;
+  }
+
+  const stats = prepareBuildDirectory(settings);
   const templates = loadTemplates(settings.templatesDir);
   fs.writeFileSync(path.join(settings.buildDir, 'index.html'), renderIndex(collection.articles, settings, templates));
 
@@ -1489,11 +1600,685 @@ function generateSite(options) {
     }
   }
 
-  if (stats.imagesStripped > 0) {
-    settings.logger.log('Removed metadata (EXIF/GPS/XMP/text) from ' + String(stats.imagesStripped) + ' image(s).');
-  }
-  settings.logger.log('Generated ' + String(collection.articles.length) + ' article(s) in ' + settings.buildDir + '/');
+  reportBuild(stats, collection.articles.length, settings);
   return { articles: collection.articles, outputDir: settings.buildDir };
+}
+
+// ---------------------------------------------------------------------------
+// Multilingual sites
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} SectionName
+ * @property {string} slug - Address part of the section in this language.
+ * @property {string} title - Heading of the section in this language.
+ * @property {(number|null)} order - Position among the sections, or null.
+ */
+
+/**
+ * @typedef {Object} ArticleGroup
+ * @property {string} id - `<section folder>/<article folder>`, the same in all languages.
+ * @property {string} folder - Name of the article folder (for sorting).
+ * @property {string} sourceDir - The article folder in the content directory.
+ * @property {Map<string, Article>} translations - Article per language code.
+ */
+
+/**
+ * @typedef {Object} Section
+ * @property {string} folder - Name of the section folder.
+ * @property {Map<string, SectionName>} names - Name per language code.
+ * @property {Array<ArticleGroup>} groups - Articles of the section, sorted.
+ */
+
+/**
+ * @typedef {Object} MultilingualCollection
+ * @property {Array<Section>} sections - Sections, sorted.
+ * @property {Array<string>} drafts - Files marked as drafts.
+ * @property {Array<{file: string, reason: string}>} skipped - Files that cannot be published.
+ */
+
+/**
+ * @typedef {Object} SitePage
+ * @property {ArticleGroup} group - The article.
+ * @property {Article} article - The translation shown on this page.
+ * @property {string} file - Where the page is written.
+ */
+
+/**
+ * @typedef {Object} MultilingualPlan
+ * @property {Array<SitePage>} pages - Article pages to write.
+ * @property {Map<string, Map<string, string>>} files - Page file per article id and language code.
+ * @property {Map<string, Article>} homes - Home article per language code.
+ * @property {Array<{file: string, reason: string}>} skipped - Translations that cannot be published.
+ */
+
+/**
+ * Language and address part of a content file name such as `de-das-netz.md`.
+ *
+ * @param {string} name - File name.
+ * @param {Array<string>} codes - Configured language codes.
+ * @returns {({lang: string, slug: string}|null)} Language and slug, or null when the name does not follow the pattern.
+ */
+function parseLanguageFileName(name, codes) {
+  const match = name.match(/^([a-z]{2,3})-([a-z0-9][a-z0-9-]*)\.md$/);
+  if (match === null || !codes.includes(match[1])) {
+    return null;
+  }
+  return { lang: match[1], slug: match[2] };
+}
+
+/**
+ * Turn the source of a translation file into an article.
+ *
+ * @param {string} source - File contents.
+ * @param {string} filePath - Path of the file.
+ * @param {string} lang - Language from the file name.
+ * @returns {ParseResult} The article, or why it is not published.
+ */
+function parseTranslationSource(source, filePath, lang) {
+  const text = normalizeNewlines(source.replace(/^﻿/, ''));
+  const match = text.match(/^---\n(.*?)\n---(?:\n(.*))?$/s);
+  if (match === null) {
+    return { article: null, draft: false, skipReason: 'no frontmatter (--- block at the top of the file)' };
+  }
+  const fields = parseFrontmatter(match[1]);
+  if (fieldOrEmpty(fields, 'draft') === 'true') {
+    return { article: null, draft: true, skipReason: 'draft' };
+  }
+  if (fieldOrEmpty(fields, 'title') === '') {
+    return { article: null, draft: false, skipReason: 'missing title in frontmatter' };
+  }
+  let body = '';
+  if (match[2] !== undefined) {
+    body = match[2].trim();
+  }
+  return {
+    article: {
+      category: '',
+      title: fields.title,
+      authors: fieldOrEmpty(fields, 'authors'),
+      image: fieldOrEmpty(fields, 'image'),
+      explanation: fieldOrEmpty(fields, 'explanation'),
+      lang: lang,
+      order: parseOrder(fieldOrEmpty(fields, 'order')),
+      toc: fieldOrEmpty(fields, 'toc') !== 'false',
+      home: fieldOrEmpty(fields, 'home') === 'true',
+      body: body,
+      filePath: filePath,
+    },
+    draft: false,
+    skipReason: '',
+  };
+}
+
+/**
+ * Smallest `order:` of several entries, or Infinity when none has one.
+ *
+ * @param {Array<{order: (number|null)}>} entries - Articles or section names.
+ * @returns {number} The smallest order.
+ */
+function smallestOrder(entries) {
+  let smallest = Infinity;
+  for (const entry of entries) {
+    if (entry.order !== null && entry.order < smallest) {
+      smallest = entry.order;
+    }
+  }
+  return smallest;
+}
+
+/**
+ * @typedef {Object} SortKey
+ * @property {string} folder - Folder name.
+ * @property {Array<{order: (number|null)}>} entries - Section names or translations, each with an `order:`.
+ */
+
+/**
+ * Sort comparator for sections and article groups: by smallest `order:`, then by folder name.
+ *
+ * @param {SortKey} first - One item.
+ * @param {SortKey} second - Another item.
+ * @returns {number} Negative, zero or positive, as Array#sort expects.
+ */
+function compareFolders(first, second) {
+  const firstOrder = smallestOrder(first.entries);
+  const secondOrder = smallestOrder(second.entries);
+  if (firstOrder !== secondOrder) {
+    return firstOrder - secondOrder;
+  }
+  if (first.folder < second.folder) {
+    return -1;
+  }
+  if (first.folder > second.folder) {
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * Sort key wrapper for a section.
+ *
+ * @param {Section} section - The section.
+ * @returns {SortKey} Folder and names.
+ */
+function sectionSortKey(section) {
+  return { folder: section.folder, entries: Array.from(section.names.values()) };
+}
+
+/**
+ * Sort key wrapper for an article group.
+ *
+ * @param {ArticleGroup} group - The article.
+ * @returns {SortKey} Folder and translations.
+ */
+function groupSortKey(group) {
+  return { folder: group.folder, entries: Array.from(group.translations.values()) };
+}
+
+/**
+ * Sort comparator for sections.
+ *
+ * @param {Section} first - One section.
+ * @param {Section} second - Another section.
+ * @returns {number} Negative, zero or positive.
+ */
+function compareSections(first, second) {
+  return compareFolders(sectionSortKey(first), sectionSortKey(second));
+}
+
+/**
+ * Sort comparator for article groups.
+ *
+ * @param {ArticleGroup} first - One article.
+ * @param {ArticleGroup} second - Another article.
+ * @returns {number} Negative, zero or positive.
+ */
+function compareGroups(first, second) {
+  return compareFolders(groupSortKey(first), groupSortKey(second));
+}
+
+/**
+ * Read a multilingual content directory: `<section>/<lang>-<slug>.md` names a
+ * section, `<section>/<article>/<lang>-<slug>.md` is one translation of an article.
+ *
+ * @param {string} contentDir - Content directory.
+ * @param {Array<string>} codes - Configured language codes.
+ * @returns {MultilingualCollection} Sections with their articles, drafts and skipped files.
+ */
+function collectMultilingual(contentDir, codes) {
+  const collection = { sections: [], drafts: [], skipped: [] };
+
+  /**
+   * Note a Markdown file whose name has no configured language prefix.
+   *
+   * @param {string} file - The file.
+   * @returns {void}
+   */
+  function skipUnnamed(file) {
+    collection.skipped.push({ file: file, reason: 'file name does not start with a language code (' + codes.join('-, ') + '-)' });
+  }
+
+  for (const sectionFolder of fs.readdirSync(contentDir).sort()) {
+    const sectionDir = path.join(contentDir, sectionFolder);
+    if (!fs.statSync(sectionDir).isDirectory()) {
+      continue;
+    }
+    const section = { folder: sectionFolder, names: new Map(), groups: [] };
+    for (const name of fs.readdirSync(sectionDir).sort()) {
+      const entry = path.join(sectionDir, name);
+      if (fs.statSync(entry).isDirectory()) {
+        const group = { id: path.join(sectionFolder, name), folder: name, sourceDir: entry, translations: new Map() };
+        for (const fileName of fs.readdirSync(entry).sort()) {
+          if (!fileName.endsWith('.md')) {
+            continue;
+          }
+          const file = path.join(entry, fileName);
+          const language = parseLanguageFileName(fileName, codes);
+          if (language === null) {
+            skipUnnamed(file);
+            continue;
+          }
+          const result = parseTranslationSource(fs.readFileSync(file, 'utf8'), file, language.lang);
+          if (result.article !== null) {
+            result.article.slug = language.slug;
+            group.translations.set(language.lang, result.article);
+          } else if (result.draft) {
+            collection.drafts.push(file);
+          } else {
+            collection.skipped.push({ file: file, reason: result.skipReason });
+          }
+        }
+        if (group.translations.size > 0) {
+          section.groups.push(group);
+        }
+      } else if (name.endsWith('.md')) {
+        const language = parseLanguageFileName(name, codes);
+        if (language === null) {
+          skipUnnamed(entry);
+          continue;
+        }
+        const fields = parseFrontmatter(normalizeNewlines(fs.readFileSync(entry, 'utf8')).replace(/^---\n|\n---[\s\S]*$/g, ''));
+        if (fieldOrEmpty(fields, 'title') === '') {
+          collection.skipped.push({ file: entry, reason: 'missing title in frontmatter' });
+          continue;
+        }
+        section.names.set(language.lang, {
+          slug: language.slug,
+          title: fields.title,
+          order: parseOrder(fieldOrEmpty(fields, 'order')),
+        });
+      }
+    }
+    section.groups.sort(compareGroups);
+    collection.sections.push(section);
+  }
+  collection.sections.sort(compareSections);
+  return collection;
+}
+
+/**
+ * Folder of a language in the build directory.
+ *
+ * @param {Settings} settings - Build settings.
+ * @param {string} code - Language code.
+ * @returns {string} The folder (the build directory itself for the first language).
+ */
+function languageDir(settings, code) {
+  for (const language of settings.languages) {
+    if (language.code === code) {
+      return path.join(settings.buildDir, language.path);
+    }
+  }
+  throw new Error('Unknown language ' + code);
+}
+
+/**
+ * Decide which pages are written where.
+ *
+ * @param {MultilingualCollection} collection - Result of collectMultilingual.
+ * @param {Settings} settings - Build settings.
+ * @returns {MultilingualPlan} Pages, page files per article and language, home articles and skipped translations.
+ */
+function planMultilingual(collection, settings) {
+  const plan = { pages: [], files: new Map(), homes: new Map(), skipped: [] };
+  for (const section of collection.sections) {
+    for (const group of section.groups) {
+      const files = new Map();
+      for (const entry of group.translations) {
+        const lang = entry[0];
+        const article = entry[1];
+        if (article.home) {
+          if (!plan.homes.has(lang)) {
+            plan.homes.set(lang, { article: article, group: group });
+          }
+          continue;
+        }
+        if (!section.names.has(lang)) {
+          plan.skipped.push({
+            file: article.filePath,
+            reason: 'the section folder ' + section.folder + ' has no ' + lang + '-*.md file with the section name',
+          });
+          continue;
+        }
+        const file = path.join(languageDir(settings, lang), section.names.get(lang).slug, article.slug + '.html');
+        files.set(lang, file);
+        plan.pages.push({ group: group, article: article, file: file });
+      }
+      plan.files.set(group.id, files);
+    }
+  }
+  return plan;
+}
+
+/**
+ * Load the texts of one language from `templates/texts/<code>.json`.
+ *
+ * @param {string} templatesDir - Templates directory.
+ * @param {string} code - Language code.
+ * @returns {Object<string, string>} Text per key; empty when the file does not exist.
+ * @throws {Error} When the file is not valid JSON.
+ */
+function loadTexts(templatesDir, code) {
+  const file = path.join(templatesDir, 'texts', code + '.json');
+  if (!fs.existsSync(file)) {
+    return {};
+  }
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+/**
+ * Replace `{{text.key}}` placeholders.
+ *
+ * @param {string} html - Page.
+ * @param {Object<string, string>} texts - Text per key.
+ * @returns {string} The page with every known text filled in.
+ */
+function fillTexts(html, texts) {
+  let result = html;
+  for (const key of Object.keys(texts)) {
+    result = fill(result, 'text.' + key, texts[key]);
+  }
+  return result;
+}
+
+/**
+ * Replace `{{link:<section folder>/<article folder>}}` with a link to that
+ * article in the page's language. Unknown or untranslated targets stay as
+ * they are, so they are reported as unfilled placeholders.
+ *
+ * @param {string} html - Page.
+ * @param {string} pageFile - Where the page is written.
+ * @param {string} lang - Language of the page.
+ * @param {Map<string, Map<string, string>>} files - Page file per article id and language.
+ * @returns {string} The page with links filled in.
+ */
+function fillLinks(html, pageFile, lang, files) {
+  /**
+   * Link for one placeholder.
+   *
+   * @param {string} match - The placeholder.
+   * @param {string} id - Article id after `link:`.
+   * @returns {string} The relative link, or the placeholder itself.
+   */
+  function link(match, id) {
+    const key = path.join(id);
+    if (files.has(key) && files.get(key).has(lang)) {
+      return relativeUrl(path.dirname(pageFile), files.get(key).get(lang));
+    }
+    return match;
+  }
+  return html.replace(/{{link:([^{}]+)}}/g, link);
+}
+
+/**
+ * The language switch for a page: the other translations as links, the
+ * current language as plain text. Empty when the page has no translation.
+ *
+ * @param {string} pageFile - Where the page is written.
+ * @param {string} lang - Language of the page.
+ * @param {Map<string, string>} translations - Page file per language.
+ * @param {Array<Language>} languages - Configured languages, in order.
+ * @returns {string} HTML.
+ */
+function languageSwitch(pageFile, lang, translations, languages) {
+  if (translations.size < 2) {
+    return '';
+  }
+  const items = [];
+  for (const language of languages) {
+    if (!translations.has(language.code)) {
+      continue;
+    }
+    const label = language.code.toUpperCase();
+    if (language.code === lang) {
+      items.push('<span aria-current="page">' + label + '</span>');
+    } else {
+      const href = relativeUrl(path.dirname(pageFile), translations.get(language.code));
+      items.push('<a href="' + href + '" hreflang="' + language.code + '" lang="' + language.code + '">' + label + '</a>');
+    }
+  }
+  return '<nav class="language-switch">' + items.join(' | ') + '</nav>';
+}
+
+/**
+ * `<link rel="alternate" hreflang>` tags that tell search engines about the
+ * translations of a page. Empty when the page has no translation.
+ *
+ * @param {Map<string, string>} translations - Page file per language.
+ * @param {string} defaultFile - Page for visitors whose language is not offered (`x-default`), or an empty string for none.
+ * @param {Settings} settings - Build settings.
+ * @returns {string} HTML, one tag per line.
+ */
+function alternateLinks(translations, defaultFile, settings) {
+  if (translations.size < 2) {
+    return '';
+  }
+  const tags = [];
+  for (const language of settings.languages) {
+    if (translations.has(language.code)) {
+      const url = absoluteUrl(settings.siteUrl, path.relative(settings.buildDir, translations.get(language.code)));
+      tags.push('<link rel="alternate" hreflang="' + language.code + '" href="' + url + '">');
+    }
+  }
+  if (defaultFile !== '') {
+    tags.push('<link rel="alternate" hreflang="x-default" href="' + absoluteUrl(settings.siteUrl, path.relative(settings.buildDir, defaultFile)) + '">');
+  }
+  return tags.join('\n');
+}
+
+/**
+ * Script for the home page of the first language: visitors who arrive from
+ * another site and whose browser does not prefer this language are sent to
+ * the home page of their language, or of the second language. Visitors who
+ * click through the site are never redirected.
+ *
+ * @param {Array<Language>} languages - Configured languages, in order.
+ * @returns {string} A `<script>` element.
+ */
+function languageRedirectScript(languages) {
+  const targets = {};
+  for (const language of languages) {
+    let target = '';
+    if (language.path !== '') {
+      target = language.path + '/index.html';
+    }
+    targets[language.code] = target;
+  }
+  return [
+    '<script>',
+    '(function () {',
+    '  var targets = ' + JSON.stringify(targets) + ';',
+    '  var site = location.protocol + "//" + location.host + "/";',
+    '  if (document.referrer.indexOf(site) === 0) {',
+    '    return;',
+    '  }',
+    '  var wanted = navigator.languages;',
+    '  if (wanted === undefined || wanted.length === 0) {',
+    '    wanted = [navigator.language];',
+    '  }',
+    '  for (var index = 0; index < wanted.length; index += 1) {',
+    '    var code = String(wanted[index]).toLowerCase().split("-")[0];',
+    '    if (Object.prototype.hasOwnProperty.call(targets, code)) {',
+    '      if (targets[code] !== "") {',
+    '        location.replace(targets[code]);',
+    '      }',
+    '      return;',
+    '    }',
+    '  }',
+    '  location.replace(' + JSON.stringify(targets[languages[1].code]) + ');',
+    '})();',
+    '</script>',
+  ].join('\n');
+}
+
+/**
+ * The page for unknown addresses (`404.html`): it forwards to the home page
+ * of the language the address belongs to, and links to all home pages when
+ * JavaScript is off.
+ *
+ * @param {Array<Language>} languages - Configured languages, in order.
+ * @param {Map<string, Object<string, string>>} texts - Texts per language; `notFound` and `languageName` are used.
+ * @returns {string} The complete page.
+ */
+function notFoundPage(languages, texts) {
+  const messages = [];
+  const links = [];
+  const prefixes = [];
+  for (const language of languages) {
+    const languageTexts = texts.get(language.code);
+    let home = '/';
+    if (language.path !== '') {
+      home = '/' + language.path + '/';
+      prefixes.push('  if (location.pathname.indexOf(' + JSON.stringify(home) + ') === 0) {\n    target = ' + JSON.stringify(home) + ';\n  }');
+    }
+    let message = 'Page not found';
+    if ('notFound' in languageTexts) {
+      message = languageTexts.notFound;
+    }
+    let name = language.code.toUpperCase();
+    if ('languageName' in languageTexts) {
+      name = languageTexts.languageName;
+    }
+    messages.push(message);
+    links.push('<a href="' + home + '" hreflang="' + language.code + '">' + name + '</a>');
+  }
+  return [
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    '<meta name="robots" content="noindex">',
+    '<title>404</title>',
+    '<script>',
+    '(function () {',
+    '  var target = "/";',
+    prefixes.join('\n'),
+    '  location.replace(target);',
+    '})();',
+    '</script>',
+    '</head>',
+    '<body>',
+    '<p>' + messages.join(' / ') + '</p>',
+    '<p>' + links.join(' · ') + '</p>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Fill everything that is specific to a page of a multilingual site, then finish it.
+ *
+ * @param {string} html - Page with its own fields filled.
+ * @param {{file: string, lang: string, translations: Map<string, string>, isHome: boolean}} page - The page.
+ * @param {{settings: Settings, templates: Templates, texts: Map<string, Object<string, string>>, plan: MultilingualPlan}} context - Build data.
+ * @returns {string} The finished page.
+ */
+function finishMultilingualPage(html, page, context) {
+  const settings = context.settings;
+  let defaultFile = '';
+  let redirect = '';
+  if (page.isHome) {
+    defaultFile = path.join(settings.buildDir, 'index.html');
+    if (page.lang === settings.languages[0].code) {
+      redirect = languageRedirectScript(settings.languages);
+    }
+  }
+  let result = fill(html, 'footer', context.templates.footer);
+  result = fillTexts(result, context.texts.get(page.lang));
+  result = fillLinks(result, page.file, page.lang, context.plan.files);
+  result = fill(result, 'languageSwitch', languageSwitch(page.file, page.lang, page.translations, settings.languages));
+  result = fill(result, 'alternateLinks', alternateLinks(page.translations, defaultFile, settings));
+  result = fill(result, 'languageRedirect', redirect);
+  return finishPage(result, page.file, settings, '');
+}
+
+/**
+ * Table of contents of one language: one section per section folder with
+ * articles in this language, articles with `toc: false` left out.
+ *
+ * @param {MultilingualCollection} collection - Sections and articles.
+ * @param {MultilingualPlan} plan - Page files.
+ * @param {string} lang - Language.
+ * @param {string} indexDir - Directory of the index page.
+ * @returns {string} HTML.
+ */
+function multilingualTableOfContents(collection, plan, lang, indexDir) {
+  let html = '';
+  for (const section of collection.sections) {
+    let items = '';
+    for (const group of section.groups) {
+      const files = plan.files.get(group.id);
+      if (files.has(lang) && group.translations.get(lang).toc) {
+        items += '<p><a href="' + relativeUrl(indexDir, files.get(lang)) + '">' + group.translations.get(lang).title + '</a></p>\n';
+      }
+    }
+    if (items !== '') {
+      html += '<section>\n<h2>' + section.names.get(lang).title + '</h2>\n' + items + '</section>\n';
+    }
+  }
+  return html;
+}
+
+/**
+ * Build a multilingual site (see the `languages` option).
+ *
+ * @param {Settings} settings - Build settings with `languages`.
+ * @returns {(BuildResult|null)} The published translations, or null when nothing was published.
+ * @throws {Error} When the build directory is unsafe or a texts file is not valid JSON.
+ */
+function generateMultilingualSite(settings) {
+  const codes = [];
+  for (const language of settings.languages) {
+    codes.push(language.code);
+  }
+  const collection = collectMultilingual(settings.contentDir, codes);
+  const plan = planMultilingual(collection, settings);
+  for (const skipped of plan.skipped) {
+    collection.skipped.push(skipped);
+  }
+  reportCollection({ articles: [], drafts: collection.drafts, skipped: collection.skipped }, settings);
+  if (plan.pages.length === 0 && plan.homes.size === 0) {
+    settings.logger.log('No publishable .md files found in ' + settings.contentDir + '/');
+    return null;
+  }
+
+  const stats = prepareBuildDirectory(settings);
+  const templates = loadTemplates(settings.templatesDir);
+  const texts = new Map();
+  for (const code of codes) {
+    texts.set(code, loadTexts(settings.templatesDir, code));
+  }
+  const context = { settings: settings, templates: templates, texts: texts, plan: plan };
+
+  const indexFiles = new Map();
+  for (const code of codes) {
+    indexFiles.set(code, path.join(languageDir(settings, code), 'index.html'));
+  }
+  for (const code of codes) {
+    const indexFile = indexFiles.get(code);
+    const indexDir = path.dirname(indexFile);
+    let html = fill(templates.index, 'categories', multilingualTableOfContents(collection, plan, code, indexDir));
+    html = fill(fill(html, 'logoHref', 'index.html'), 'lang', code);
+    if (plan.homes.has(code)) {
+      const home = plan.homes.get(code);
+      html = fillHomeArticle(html, home.article, indexDir, path.join(settings.buildDir, 'media', home.group.id));
+    }
+    fs.mkdirSync(indexDir, { recursive: true });
+    fs.writeFileSync(indexFile, finishMultilingualPage(html, { file: indexFile, lang: code, translations: indexFiles, isHome: true }, context));
+  }
+
+  const published = [];
+  for (const page of plan.pages) {
+    const target = {
+      file: page.file,
+      articleDir: path.join(settings.buildDir, 'media', page.group.id),
+      sourceDir: page.group.sourceDir,
+      lang: page.article.lang,
+      indexFile: indexFiles.get(page.article.lang),
+    };
+    const html = fillArticleTemplate(templates.article, page.article, target, settings);
+    const translations = plan.files.get(page.group.id);
+    fs.mkdirSync(path.dirname(page.file), { recursive: true });
+    fs.writeFileSync(page.file, finishMultilingualPage(html, { file: page.file, lang: page.article.lang, translations: translations, isHome: false }, context));
+    published.push(page.article);
+  }
+
+  for (const section of collection.sections) {
+    for (const group of section.groups) {
+      for (const name of ARTICLE_ASSET_DIRECTORIES) {
+        const source = path.join(group.sourceDir, name);
+        if (fs.existsSync(source)) {
+          copyDirectory(source, path.join(settings.buildDir, 'media', group.id, name), settings.stripImageMetadata, stats);
+        }
+      }
+    }
+  }
+  fs.writeFileSync(path.join(settings.buildDir, '404.html'), notFoundPage(settings.languages, texts));
+
+  reportBuild(stats, published.length, settings);
+  return { articles: published, outputDir: settings.buildDir };
 }
 
 /**
@@ -1521,12 +2306,18 @@ module.exports = {
   MIN_IMAGE_HEIGHT: MIN_IMAGE_HEIGHT,
   MIN_IMAGE_WIDTH: MIN_IMAGE_WIDTH,
   absoluteUrl: absoluteUrl,
+  alternateLinks: alternateLinks,
   articleOutput: articleOutput,
   assertSafeBuildDir: assertSafeBuildDir,
+  checkLanguages: checkLanguages,
   checkTemplates: checkTemplates,
   closeList: closeList,
   collectArticles: collectArticles,
+  collectMultilingual: collectMultilingual,
   compareArticles: compareArticles,
+  compareFolders: compareFolders,
+  compareGroups: compareGroups,
+  compareSections: compareSections,
   copyDirectory: copyDirectory,
   emphasis: emphasis,
   escapeHtml: escapeHtml,
@@ -1534,30 +2325,46 @@ module.exports = {
   exifOrientationSegment: exifOrientationSegment,
   fieldOrEmpty: fieldOrEmpty,
   fill: fill,
+  fillArticleTemplate: fillArticleTemplate,
   fillHomeArticle: fillHomeArticle,
+  fillLinks: fillLinks,
+  fillTexts: fillTexts,
   findJpegOrientation: findJpegOrientation,
   findLeftoverPlaceholders: findLeftoverPlaceholders,
   findMetadataStripper: findMetadataStripper,
+  finishMultilingualPage: finishMultilingualPage,
   finishPage: finishPage,
   generateCategoriesHtml: generateCategoriesHtml,
+  generateMultilingualSite: generateMultilingualSite,
   generateSite: generateSite,
   getImageDimensions: getImageDimensions,
   getImageSize: getImageSize,
   getJpegInfo: getJpegInfo,
+  groupSortKey: groupSortKey,
   inline: inline,
   isExternalUrl: isExternalUrl,
   isJpegMetadataSegment: isJpegMetadataSegment,
   isPng: isPng,
   isStandaloneJpegMarker: isStandaloneJpegMarker,
   isStartOfFrameMarker: isStartOfFrameMarker,
+  languageDir: languageDir,
+  languageRedirectScript: languageRedirectScript,
+  languageSwitch: languageSwitch,
   loadTemplates: loadTemplates,
+  loadTexts: loadTexts,
   markdownToHtml: markdownToHtml,
+  multilingualTableOfContents: multilingualTableOfContents,
   normalizeNewlines: normalizeNewlines,
+  notFoundPage: notFoundPage,
   orderValue: orderValue,
   parseArticleSource: parseArticleSource,
   parseFrontmatter: parseFrontmatter,
+  parseLanguageFileName: parseLanguageFileName,
   parseMarkdown: parseMarkdown,
   parseOrder: parseOrder,
+  parseTranslationSource: parseTranslationSource,
+  planMultilingual: planMultilingual,
+  prepareBuildDirectory: prepareBuildDirectory,
   readArticle: readArticle,
   readExifOrientation: readExifOrientation,
   readJpegLayout: readJpegLayout,
@@ -1567,9 +2374,13 @@ module.exports = {
   renderArticle: renderArticle,
   renderImage: renderImage,
   renderIndex: renderIndex,
+  renderMarkdown: renderMarkdown,
+  reportBuild: reportBuild,
   reportCollection: reportCollection,
   resolveOptions: resolveOptions,
   runCli: runCli,
+  sectionSortKey: sectionSortKey,
+  smallestOrder: smallestOrder,
   socialImage: socialImage,
   stripJpegMetadata: stripJpegMetadata,
   stripPngMetadata: stripPngMetadata,

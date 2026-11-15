@@ -74,6 +74,56 @@ Supported: `#`–`######` headings, `-`/`*` and `1.` lists, `_em_`/`*em*`,
 resolved), bare `https://` URLs, `![caption](images/…)` on its own line, and
 inline HTML. Every non-empty line is its own paragraph.
 
+## Multilingual sites
+
+Pass two or more `languages` to switch to the multilingual layout. The first
+language is published at the top level, every other one in its own folder:
+
+```js
+generateSite({
+  rootDir: __dirname,
+  siteUrl: 'https://example.com',
+  languages: [
+    { code: 'de', path: '' },          // German at /
+    { code: 'en', path: 'english' },   // English at /english/
+  ],
+});
+```
+
+Content: a section folder holds one small file per language with the
+section's name; every article folder holds one file per language. The file
+name gives the language and the address; the folder pairs the translations.
+
+```
+content/
+  renewable-energy/
+    de-erneuerbare-energie.md     ---  title: Erneuerbare Energie  ---
+    en-renewable-energy.md        ---  title: Renewable Energy  ---
+    the-grid/
+      de-das-netz.md              → /erneuerbare-energie/das-netz.html
+      en-the-grid.md              → /english/renewable-energy/the-grid.html
+      images/  pdfs/              → /media/renewable-energy/the-grid/… (shared)
+  home/start/
+    de-start.md  en-start.md      home: true → fills the home page of that language
+```
+
+- Article frontmatter: `title` (required), `authors`, `image`, `explanation`,
+  `order`, `toc`, `draft`, and `home: true` for the home page article. No `category`.
+- Section files: `title` (required) and `order`.
+- Markdown files without a language prefix (for example notes) are skipped with a warning.
+- An article that exists in only one language simply has no page in the other.
+- `404.html` forwards unknown addresses to the home page of their language.
+
+Additional placeholders:
+
+| Placeholder | |
+|---|---|
+| `{{languageSwitch}}` | `<nav class="language-switch">` with links to the other translations of the page (empty without translation) |
+| `{{alternateLinks}}` | `<link rel="alternate" hreflang>` tags for search engines (put it in `<head>`) |
+| `{{languageRedirect}}` | on the first language's home page: a script that sends visitors arriving from elsewhere to their language (put it in `<head>` of `index.html`) |
+| `{{text.key}}` | text from `templates/texts/<code>.json`, for example `{"imprint": "Impressum"}` |
+| `{{link:section/article}}` | link to that article (content folders) in the page's language |
+
 ## Quality assurance
 
 Everything lives in `qa/` and is plain JavaScript on Node's built-in test
