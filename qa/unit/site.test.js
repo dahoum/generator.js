@@ -207,6 +207,7 @@ function optionDefaults() {
     defaultLang: 'en',
     logger: console,
     homeDir: os.homedir(),
+    languages: null,
   });
   const fromCwd = generator.resolveOptions(undefined);
   assert.strictEqual(fromCwd.rootDir, process.cwd());
@@ -232,6 +233,7 @@ function optionOverrides() {
       defaultLang: 'de',
       logger: logger,
       homeDir: '/h',
+      languages: [{ code: 'de', path: '' }, { code: 'en', path: 'english' }],
     }),
     {
       rootDir: '/r',
@@ -243,6 +245,7 @@ function optionOverrides() {
       defaultLang: 'de',
       logger: logger,
       homeDir: '/h',
+      languages: [{ code: 'de', path: '' }, { code: 'en', path: 'english' }],
     }
   );
   assert.strictEqual(generator.resolveOptions({ siteUrl: 'https://a.b/c' }).siteUrl, 'https://a.b/c');
@@ -283,11 +286,11 @@ function homeArticleFields() {
   });
   const template = '{{homeTitle}}|{{homeImage}}|{{homeParagraph1}}|{{homeParagraph2}}|{{homeParagraph3}}|{{homeParagraph4}}';
   assert.strictEqual(
-    generator.fillHomeArticle(template, home, path.join(root, 'content')),
+    generator.fillHomeArticle(template, home, path.join(root, 'public'), path.join(root, 'public', 'home', 'start')),
     'Welcome|home/start/images/h.jpg|One <em>a</em>|Two line|<a href="home/start/pdfs/d.pdf">Doc</a> <a href="https://x.org">Web</a>|Four'
   );
   const short = articleIn(root, { title: 'W', body: 'Only', filePath: path.join(root, 'content', 'home', 'start', 'start.md') });
-  assert.strictEqual(generator.fillHomeArticle(template, short, path.join(root, 'content')), 'W||Only|||');
+  assert.strictEqual(generator.fillHomeArticle(template, short, path.join(root, 'public'), path.join(root, 'public', 'home', 'start')), 'W||Only|||');
 }
 test('fillHomeArticle fills the home page fields', homeArticleFields);
 
@@ -326,7 +329,10 @@ function socialImages() {
     'content/cat/slug/images/exact.png': Buffer.concat([fixtures.PNG_SIGNATURE, fixtures.pngHeader(1200, 627)]),
   });
   const settings = settingsFor(root, {});
-  const location = generator.articleOutput(articleIn(root, {}), settings.contentDir);
+  const location = {
+    articleDir: path.join(root, 'public', 'cat', 'slug'),
+    sourceDir: path.join(root, 'content', 'cat', 'slug'),
+  };
 
   assert.deepStrictEqual(generator.socialImage(articleIn(root, { image: 'images/big.jpg' }), location, settings), {
     url: 'https://example.com/cat/slug/images/big.jpg',

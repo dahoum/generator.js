@@ -1,6 +1,6 @@
 {
   "name": "generator.js",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "main": "generator.js",
   "description": "Static Site Generator by Brünhild",
   "scripts": {
