@@ -118,7 +118,7 @@ Additional placeholders:
 
 | Placeholder | |
 |---|---|
-| `{{languageSwitch}}` | `<nav class="language-switch">` with links to the other translations of the page (empty without translation) |
+| `{{languageSwitch}}` | `<nav class="language-switch">` with links to the other translations of the page, labelled with `languageName` from the texts file (or the code), no separators (empty without translation) |
 | `{{alternateLinks}}` | `<link rel="alternate" hreflang>` tags for search engines (put it in `<head>`) |
 | `{{languageRedirect}}` | on the first language's home page: a script that sends visitors arriving from elsewhere to their language (put it in `<head>` of `index.html`) |
 | `{{text.key}}` | text from `templates/texts/<code>.json`, for example `{"imprint": "Impressum"}` |
