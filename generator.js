@@ -2003,16 +2003,34 @@ function fillLinks(html, pageFile, lang, files) {
 }
 
 /**
+ * Name of a language for links: `languageName` from its texts file, or the
+ * code in capitals.
+ *
+ * @param {string} code - Language code.
+ * @param {Map<string, Object<string, string>>} texts - Texts per language.
+ * @returns {string} The name, for example "Deutsch" or "DE".
+ */
+function languageLabel(code, texts) {
+  const languageTexts = texts.get(code);
+  if ('languageName' in languageTexts) {
+    return languageTexts.languageName;
+  }
+  return code.toUpperCase();
+}
+
+/**
  * The language switch for a page: the other translations as links, the
- * current language as plain text. Empty when the page has no translation.
+ * current language as plain text, without separators (style them with CSS).
+ * Empty when the page has no translation.
  *
  * @param {string} pageFile - Where the page is written.
  * @param {string} lang - Language of the page.
  * @param {Map<string, string>} translations - Page file per language.
  * @param {Array<Language>} languages - Configured languages, in order.
+ * @param {Map<string, Object<string, string>>} texts - Texts per language, for the language names.
  * @returns {string} HTML.
  */
-function languageSwitch(pageFile, lang, translations, languages) {
+function languageSwitch(pageFile, lang, translations, languages, texts) {
   if (translations.size < 2) {
     return '';
   }
@@ -2021,7 +2039,7 @@ function languageSwitch(pageFile, lang, translations, languages) {
     if (!translations.has(language.code)) {
       continue;
     }
-    const label = language.code.toUpperCase();
+    const label = languageLabel(language.code, texts);
     if (language.code === lang) {
       items.push('<span aria-current="page">' + label + '</span>');
     } else {
@@ -2029,7 +2047,7 @@ function languageSwitch(pageFile, lang, translations, languages) {
       items.push('<a href="' + href + '" hreflang="' + language.code + '" lang="' + language.code + '">' + label + '</a>');
     }
   }
-  return '<nav class="language-switch">' + items.join(' | ') + '</nav>';
+  return '<nav class="language-switch">' + items.join('') + '</nav>';
 }
 
 /**
@@ -2127,12 +2145,8 @@ function notFoundPage(languages, texts) {
     if ('notFound' in languageTexts) {
       message = languageTexts.notFound;
     }
-    let name = language.code.toUpperCase();
-    if ('languageName' in languageTexts) {
-      name = languageTexts.languageName;
-    }
     messages.push(message);
-    links.push('<a href="' + home + '" hreflang="' + language.code + '">' + name + '</a>');
+    links.push('<a href="' + home + '" hreflang="' + language.code + '">' + languageLabel(language.code, texts) + '</a>');
   }
   return [
     '<!DOCTYPE html>',
@@ -2180,7 +2194,7 @@ function finishMultilingualPage(html, page, context) {
   let result = fill(html, 'footer', context.templates.footer);
   result = fillTexts(result, context.texts.get(page.lang));
   result = fillLinks(result, page.file, page.lang, context.plan.files);
-  result = fill(result, 'languageSwitch', languageSwitch(page.file, page.lang, page.translations, settings.languages));
+  result = fill(result, 'languageSwitch', languageSwitch(page.file, page.lang, page.translations, settings.languages, context.texts));
   result = fill(result, 'alternateLinks', alternateLinks(page.translations, defaultFile, settings));
   result = fill(result, 'languageRedirect', redirect);
   return completePage(result, page.file, settings);
@@ -2361,6 +2375,7 @@ module.exports = {
   isStandaloneJpegMarker: isStandaloneJpegMarker,
   isStartOfFrameMarker: isStartOfFrameMarker,
   languageDir: languageDir,
+  languageLabel: languageLabel,
   languageRedirectScript: languageRedirectScript,
   languageSwitch: languageSwitch,
   loadTemplates: loadTemplates,

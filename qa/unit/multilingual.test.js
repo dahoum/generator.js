@@ -445,15 +445,18 @@ test('fillLinks links articles in the page language', links);
 function switches() {
   const three = [{ code: 'de', path: '' }, { code: 'fr', path: 'fr' }, { code: 'en', path: 'en' }];
   const translations = new Map([['en', '/b/en/a.html'], ['de', '/b/a.html']]);
+  const names = new Map([['de', { languageName: 'Deutsch' }], ['fr', {}], ['en', {}]]);
   assert.strictEqual(
-    generator.languageSwitch('/b/a.html', 'de', translations, three),
-    '<nav class="language-switch"><span aria-current="page">DE</span> | <a href="en/a.html" hreflang="en" lang="en">EN</a></nav>'
+    generator.languageSwitch('/b/a.html', 'de', translations, three, names),
+    '<nav class="language-switch"><span aria-current="page">Deutsch</span><a href="en/a.html" hreflang="en" lang="en">EN</a></nav>'
   );
   assert.strictEqual(
-    generator.languageSwitch('/b/en/a.html', 'en', translations, three),
-    '<nav class="language-switch"><a href="../a.html" hreflang="de" lang="de">DE</a> | <span aria-current="page">EN</span></nav>'
+    generator.languageSwitch('/b/en/a.html', 'en', translations, three, names),
+    '<nav class="language-switch"><a href="../a.html" hreflang="de" lang="de">Deutsch</a><span aria-current="page">EN</span></nav>'
   );
-  assert.strictEqual(generator.languageSwitch('/b/a.html', 'de', new Map([['de', '/b/a.html']]), three), '');
+  assert.strictEqual(generator.languageSwitch('/b/a.html', 'de', new Map([['de', '/b/a.html']]), three, names), '');
+  assert.strictEqual(generator.languageLabel('de', names), 'Deutsch');
+  assert.strictEqual(generator.languageLabel('en', names), 'EN');
 }
 test('languageSwitch links the other translations', switches);
 
@@ -601,7 +604,7 @@ function bilingualBuild() {
       '<html lang="de"><head><link rel="alternate" hreflang="de" href="https://example.com/index.html">',
       '<link rel="alternate" hreflang="en" href="https://example.com/english/index.html">',
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html">' + redirect + '</head>',
-      '<body><nav class="language-switch"><span aria-current="page">DE</span> | <a href="english/index.html" hreflang="en" lang="en">EN</a></nav><a href="index.html">Ij</a><h1>Willkommen</h1>',
+      '<body><nav class="language-switch"><span aria-current="page">Deutsch</span><a href="english/index.html" hreflang="en" lang="en">English</a></nav><a href="index.html">Ij</a><h1>Willkommen</h1>',
       '<h2>Start</h2><img src="media/home/start/images/h.jpg"><p>Hallo.</p><p></p><p></p><p></p>',
       '<section>\n<h2>Energie</h2>\n<p><a href="energie/das-netz.html">Das Netz</a></p>\n</section>\n',
       '<footer>Impressum <a href="recht/datenschutz.html">Datenschutz</a></footer></body></html>',
@@ -613,7 +616,7 @@ function bilingualBuild() {
       '<html lang="en"><head><link rel="alternate" hreflang="de" href="https://example.com/index.html">',
       '<link rel="alternate" hreflang="en" href="https://example.com/english/index.html">',
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html"></head>',
-      '<body><nav class="language-switch"><a href="../index.html" hreflang="de" lang="de">DE</a> | <span aria-current="page">EN</span></nav><a href="index.html">Ij</a><h1>Welcome</h1>',
+      '<body><nav class="language-switch"><a href="../index.html" hreflang="de" lang="de">Deutsch</a><span aria-current="page">English</span></nav><a href="index.html">Ij</a><h1>Welcome</h1>',
       '<h2>Home</h2><img src=""><p>Hello.</p><p></p><p></p><p></p>',
       '<section>\n<h2>Energy</h2>\n<p><a href="energy/the-grid.html">The Grid</a></p>\n<p><a href="energy/solo.html">Solo</a></p>\n</section>\n',
       '<footer>Imprint <a href="legal/privacy.html">Privacy</a></footer></body></html>',
@@ -626,7 +629,7 @@ function bilingualBuild() {
       '<link rel="alternate" hreflang="de" href="https://example.com/energie/das-netz.html">',
       '<link rel="alternate" hreflang="en" href="https://example.com/english/energy/the-grid.html">',
       '<link rel="stylesheet" href="../../style.css"></head>',
-      '<body><nav class="language-switch"><a href="../../energie/das-netz.html" hreflang="de" lang="de">DE</a> | <span aria-current="page">EN</span></nav><a href="../index.html">Ij</a>',
+      '<body><nav class="language-switch"><a href="../../energie/das-netz.html" hreflang="de" lang="de">Deutsch</a><span aria-current="page">English</span></nav><a href="../index.html">Ij</a>',
       '<img src="../../media/energy/grid/images/p.jpg" alt="The Grid">',
       '<p>See <a href="../../media/energy/grid/pdfs/a.pdf">PDF</a>.</p>',
       '<footer>Imprint <a href="../legal/privacy.html">Privacy</a></footer></body></html>',
