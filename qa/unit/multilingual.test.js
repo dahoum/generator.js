@@ -63,7 +63,7 @@ function makeBilingualSite() {
     'templates/texts/de.json': JSON.stringify({ hero: 'Willkommen', imprint: 'Impressum', privacy: 'Datenschutz', notFound: 'Seite nicht gefunden', languageName: 'Deutsch' }),
     'templates/texts/en.json': JSON.stringify({ hero: 'Welcome', imprint: 'Imprint', privacy: 'Privacy', notFound: 'Page not found', languageName: 'English' }),
     'content/energy/de-energie.md': '---\ntitle: Energie\n---\n',
-    'content/energy/en-energy.md': '---\ntitle: Energy\norder: 2\n---\n',
+    'content/energy/en-energy.md': '---\ntitle: Energy\norder: 2\n---\nArticles about *energy*\n  in industry.\n\n  \n\nSee [the grid](energy/the-grid.html).\n',
     'content/energy/grid/de-das-netz.md': '---\ntitle: Das Netz\nimage: images/p.jpg\n---\nSiehe [PDF](pdfs/a.pdf).',
     'content/energy/grid/en-the-grid.md': '---\ntitle: The Grid\nimage: images/p.jpg\n---\nSee [PDF](pdfs/a.pdf).',
     'content/energy/grid/images/p.jpg': fixtures.cameraJpeg(1),
@@ -72,7 +72,7 @@ function makeBilingualSite() {
     'content/energy/only-english/en-solo.md': '---\ntitle: Solo\n---\nOnly in English.',
     'content/energy/draft/de-entwurf.md': '---\ntitle: Entwurf\ndraft: true\n---\n',
     'content/legal/de-recht.md': '---\ntitle: Recht\norder: 1\n---\n',
-    'content/legal/en-legal.md': '---\ntitle: Legal\n---\n',
+    'content/legal/en-legal.md': '---\ntitle: Legal\n---',
     'content/legal/privacy/de-datenschutz.md': '---\ntitle: Datenschutz\ntoc: false\n---\nDE',
     'content/legal/privacy/en-privacy.md': '---\ntitle: Privacy\ntoc: false\n---\nEN',
     'content/home/start/de-start.md': '---\ntitle: Start\nhome: true\nimage: images/h.jpg\n---\nHallo.',
@@ -82,6 +82,15 @@ function makeBilingualSite() {
   });
   return root;
 }
+
+/**
+ * Introduction of the English section "Energy" in the bilingual test site.
+ *
+ * @type {string}
+ */
+const ENERGY_TEXT =
+  '<p class="section-text">Articles about <em>energy</em> in industry.</p>\n' +
+  '<p class="section-text">See <a href="energy/the-grid.html">the grid</a>.</p>';
 
 /**
  * Read a built file.
@@ -300,7 +309,7 @@ function collecting() {
   for (const section of collection.sections) {
     const names = [];
     for (const entry of section.names) {
-      names.push(entry[0] + ':' + entry[1].slug + ':' + entry[1].title + ':' + String(entry[1].order));
+      names.push(entry[0] + ':' + entry[1].slug + ':' + entry[1].title + ':' + String(entry[1].order) + ':' + entry[1].text.length);
     }
     const groups = [];
     for (const group of section.groups) {
@@ -313,8 +322,8 @@ function collecting() {
     summary.push(section.folder + ' [' + names.join(' ') + '] ' + groups.join(' '));
   }
   assert.deepStrictEqual(summary, [
-    'legal [de:recht:Recht:1 en:legal:Legal:null] ' + path.join('legal', 'privacy') + '=de:datenschutz,en:privacy',
-    'energy [de:energie:Energie:null en:energy:Energy:2] ' +
+    'legal [de:recht:Recht:1:0 en:legal:Legal:null:0] ' + path.join('legal', 'privacy') + '=de:datenschutz,en:privacy',
+    'energy [de:energie:Energie:null:0 en:energy:Energy:2:' + ENERGY_TEXT.length + '] ' +
       path.join('energy', 'grid') + '=de:das-netz,en:the-grid ' + path.join('energy', 'only-english') + '=en:solo',
     'home [] ' + path.join('home', 'start') + '=de:start,en:start',
   ]);
@@ -331,6 +340,23 @@ function collecting() {
   ]);
 }
 test('collectMultilingual reads sections, translations, drafts and problems', collecting);
+
+/**
+ * The introduction of a section is the Markdown below its frontmatter.
+ *
+ * @returns {void}
+ */
+function sectionIntroduction() {
+  assert.strictEqual(generator.sectionText('---\ntitle: A\n---\n'), '');
+  assert.strictEqual(generator.sectionText('---\ntitle: A\n---'), '');
+  assert.strictEqual(generator.sectionText('title: A\nText'), '');
+  assert.strictEqual(generator.sectionText('---\ntitle: A\n---\n\n  \n'), '');
+  assert.strictEqual(
+    generator.sectionText('---\ntitle: A\norder: 1\n---\n\nOne\ntwo.\n---\nThree [x](y.html).\n\nFour.'),
+    '<p class="section-text">One two. --- Three <a href="y.html">x</a>.</p>\n<p class="section-text">Four.</p>'
+  );
+}
+test('sectionText turns the text below the frontmatter into paragraphs', sectionIntroduction);
 
 /**
  * Language folders in the build directory.
@@ -618,7 +644,7 @@ function bilingualBuild() {
       '<link rel="alternate" hreflang="x-default" href="https://example.com/index.html"></head>',
       '<body><nav class="language-switch"><a href="../index.html" hreflang="de" lang="de">Deutsch</a><span aria-current="page">English</span></nav><a href="index.html">Ij</a><h1>Welcome</h1>',
       '<h2>Home</h2><img src=""><p>Hello.</p><p></p><p></p><p></p>',
-      '<section>\n<h2>Energy</h2>\n<p><a href="energy/the-grid.html">The Grid</a></p>\n<p><a href="energy/solo.html">Solo</a></p>\n</section>\n',
+      '<section>\n<h2>Energy</h2>\n' + ENERGY_TEXT + '\n<p><a href="energy/the-grid.html">The Grid</a></p>\n<p><a href="energy/solo.html">Solo</a></p>\n</section>\n',
       '<footer>Imprint <a href="legal/privacy.html">Privacy</a></footer></body></html>',
     ].join('\n')
   );
