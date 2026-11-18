@@ -97,7 +97,7 @@ name gives the language and the address; the folder pairs the translations.
 ```
 content/
   renewable-energy/
-    de-erneuerbare-energie.md     ---  title: Erneuerbare Energie  ---
+    de-erneuerbare-energie.md     ---  title: Erneuerbare Energie  ---  (optional introduction below)
     en-renewable-energy.md        ---  title: Renewable Energy  ---
     the-grid/
       de-das-netz.md              → /erneuerbare-energie/das-netz.html
@@ -109,7 +109,9 @@ content/
 
 - Article frontmatter: `title` (required), `authors`, `image`, `explanation`,
   `order`, `toc`, `draft`, and `home: true` for the home page article. No `category`.
-- Section files: `title` (required) and `order`.
+- Section files: `title` (required) and `order`. Text below the frontmatter is
+  the section's introduction: on the home page it appears between the section
+  heading and the article links, one `<p class="section-text">` per paragraph.
 - Markdown files without a language prefix (for example notes) are skipped with a warning.
 - An article that exists in only one language simply has no page in the other.
 - `404.html` forwards unknown addresses to the home page of their language.

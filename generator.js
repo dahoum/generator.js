@@ -1625,6 +1625,7 @@ function generateSite(options) {
  * @property {string} slug - Address part of the section in this language.
  * @property {string} title - Heading of the section in this language.
  * @property {(number|null)} order - Position among the sections, or null.
+ * @property {string} text - Introduction below the heading as HTML paragraphs, or an empty string.
  */
 
 /**
@@ -1677,6 +1678,38 @@ function parseLanguageFileName(name, codes) {
     return null;
   }
   return { lang: match[1], slug: match[2] };
+}
+
+/**
+ * Introduction of a section: the Markdown below the frontmatter of its name
+ * file, one `<p class="section-text">` per paragraph. Links are kept as written.
+ *
+ * @param {string} source - Contents of the section name file, with `\n` line ends.
+ * @returns {string} HTML paragraphs, or an empty string when there is no text.
+ */
+function sectionText(source) {
+  /**
+   * Keep a link target as written.
+   *
+   * @param {string} href - Link target from Markdown.
+   * @returns {string} The same target.
+   */
+  function keepHref(href) {
+    return href;
+  }
+
+  const match = source.match(/^---\n.*?\n---\n(.*)$/s);
+  if (match === null) {
+    return '';
+  }
+  const paragraphs = [];
+  for (const paragraph of match[1].split(/\n\s*\n/)) {
+    const text = paragraph.trim();
+    if (text !== '') {
+      paragraphs.push('<p class="section-text">' + inline(text.replace(/\s*\n\s*/g, ' '), keepHref) + '</p>');
+    }
+  }
+  return paragraphs.join('\n');
 }
 
 /**
@@ -1869,7 +1902,8 @@ function collectMultilingual(contentDir, codes) {
           skipUnnamed(entry);
           continue;
         }
-        const fields = parseFrontmatter(normalizeNewlines(fs.readFileSync(entry, 'utf8')).replace(/^---\n|\n---[\s\S]*$/g, ''));
+        const source = normalizeNewlines(fs.readFileSync(entry, 'utf8'));
+        const fields = parseFrontmatter(source.replace(/^---\n|\n---[\s\S]*$/g, ''));
         if (fieldOrEmpty(fields, 'title') === '') {
           collection.skipped.push({ file: entry, reason: 'missing title in frontmatter' });
           continue;
@@ -1878,6 +1912,7 @@ function collectMultilingual(contentDir, codes) {
           slug: language.slug,
           title: fields.title,
           order: parseOrder(fieldOrEmpty(fields, 'order')),
+          text: sectionText(source),
         });
       }
     }
@@ -2202,7 +2237,8 @@ function finishMultilingualPage(html, page, context) {
 
 /**
  * Table of contents of one language: one section per section folder with
- * articles in this language, articles with `toc: false` left out.
+ * articles in this language, articles with `toc: false` left out. The
+ * section's introduction, if any, comes between its heading and the links.
  *
  * @param {MultilingualCollection} collection - Sections and articles.
  * @param {MultilingualPlan} plan - Page files.
@@ -2221,7 +2257,12 @@ function multilingualTableOfContents(collection, plan, lang, indexDir) {
       }
     }
     if (items !== '') {
-      html += '<section>\n<h2>' + section.names.get(lang).title + '</h2>\n' + items + '</section>\n';
+      const name = section.names.get(lang);
+      let text = '';
+      if (name.text !== '') {
+        text = name.text + '\n';
+      }
+      html += '<section>\n<h2>' + name.title + '</h2>\n' + text + items + '</section>\n';
     }
   }
   return html;
@@ -2408,6 +2449,7 @@ module.exports = {
   resolveOptions: resolveOptions,
   runCli: runCli,
   sectionSortKey: sectionSortKey,
+  sectionText: sectionText,
   smallestOrder: smallestOrder,
   socialImage: socialImage,
   stripJpegMetadata: stripJpegMetadata,
